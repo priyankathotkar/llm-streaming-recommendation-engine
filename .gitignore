@@ -1,7 +1,37 @@
-venv/
+# Python cache
 __pycache__/
 *.pyc
+*$py.class
+
+# Virtual environments
 .env
+.venv
+venv/
+env/
+ENV/
+
+# Data & models (large files)
 models/
 data/raw/
+
+# Build / distribution
+build/
+dist/
+*.egg-info/
+
+# Jupyter
 .ipynb_checkpoints/
+
+# Logs & coverage
+*.log
+.coverage
+coverage.xml
+htmlcov/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
