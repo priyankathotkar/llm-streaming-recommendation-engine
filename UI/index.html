@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CineAI — AI Movie Recommendation Engine</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --navy:    #07080f;
+  --surface: #0d0f1e;
+  --card:    #131629;
+  --border:  rgba(255,255,255,0.07);
+  --indigo:  #6366f1;
+  --purple:  #8b5cf6;
+  --green:   #22c55e;
+  --teal:    #1D9E75;
+  --red:     #f87171;
+  --muted:   #64748b;
+  --light:   #c7d2fe;
+  --text:    #e2e8f0;
+}
+
+html, body { height: 100%; }
+
+body {
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  background: var(--navy);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ── Nav ── */
+nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,8,15,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+}
+.nav-logo {
+  font-size: 18px; font-weight: 700;
+  background: linear-gradient(135deg, #818cf8, #c084fc);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.3px;
+}
+.nav-links { display: flex; gap: 4px; }
+.nav-links a {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px; font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+}
+.nav-links a:hover { color: white; background: rgba(255,255,255,0.06); }
+.nav-links a.active { color: white; background: rgba(99,102,241,0.15); }
+
+/* ── Pages ── */
+.page { display: none; padding: 36px 24px; max-width: 1100px; margin: 0 auto; }
+.page.active { display: block; }
+
+/* ── Home ── */
+.home-hero {
+  text-align: center;
+  padding: 80px 20px 60px;
+}
+.home-hero h1 {
+  font-size: clamp(36px, 6vw, 60px);
+  font-weight: 700;
+  letter-spacing: -1.5px;
+  line-height: 1.1;
+  margin-bottom: 16px;
+}
+.hero-gradient {
+  background: linear-gradient(135deg, #818cf8 0%, #c084fc 50%, #38bdf8 100%);
+  background-clip: text;
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.home-hero p {
+  color: var(--muted); font-size: 17px; max-width: 520px; margin: 0 auto 36px; line-height: 1.6;
+}
+.hero-badges {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 40px;
+}
+.hero-badge {
+  padding: 5px 14px; border-radius: 99px; font-size: 12px; font-weight: 500;
+  background: rgba(99,102,241,0.1); color: var(--light);
+  border: 1px solid rgba(99,102,241,0.25);
+}
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 13px 28px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--indigo), var(--purple));
+  border: none; color: white; font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: opacity 0.15s;
+}
+.btn-primary:hover { opacity: 0.9; }
+
+/* ── Recommender layout ── */
+.rec-layout {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+.rec-left { display: flex; flex-direction: column; gap: 16px; }
+.rec-right { display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Panels ── */
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+}
+.panel-head {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin-bottom: 14px;
+}
+
+/* ── Chip rows ── */
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  padding: 5px 12px; border-radius: 99px; font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #94a3b8; background: rgba(255,255,255,0.04);
+  user-select: none;
+}
+.chip:hover { color: white; background: rgba(255,255,255,0.09); }
+.chip.sel-mood  { background: rgba(99,102,241,0.2); color: #a5b4fc; border-color: rgba(99,102,241,0.4); }
+.chip.sel-genre { background: rgba(29,158,117,0.2); color: #6ee7b7; border-color: rgba(29,158,117,0.4); }
+
+/* ── Search input ── */
+.search-wrap { position: relative; }
+.search-input {
+  width: 100%; padding: 11px 38px 11px 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px; color: white; font-size: 14px;
+  outline: none; transition: border-color 0.15s;
+  font-family: inherit;
+}
+.search-input::placeholder { color: var(--muted); }
+.search-input:focus { border-color: rgba(99,102,241,0.5); background: rgba(99,102,241,0.05); }
+.search-clear {
+  position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
+  color: var(--muted); cursor: pointer; font-size: 16px; display: none;
+  line-height: 1;
+}
+.search-hint {
+  font-size: 12px; color: #818cf8; margin-top: 7px; min-height: 16px;
+  padding-left: 2px;
+}
+
+/* ── Mode toggle ── */
+.mode-toggle {
+  display: flex; gap: 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px; padding: 3px;
+}
+.mode-btn {
+  flex: 1; padding: 8px 12px; border-radius: 8px;
+  border: none; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
+  color: var(--muted); background: transparent;
+  font-family: inherit;
+}
+.mode-btn.active { background: var(--indigo); color: white; }
+.mode-btn:hover:not(.active) { color: white; }
+
+/* ── Camera wrapper ── */
+#cameraWrapper {
+  position: relative; border-radius: 12px; overflow: hidden;
+  border: 1.5px solid rgba(99,102,241,0.4);
+  background: #08090f;
+  aspect-ratio: 4/3;
+}
+video { display: block; width: 100%; height: 100%; object-fit: cover; }
+#overlayCanvas {
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%; pointer-events: none;
+}
+.cam-status {
+  position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+  padding: 4px 12px; border-radius: 99px; font-size: 11px; font-weight: 600;
+  background: rgba(7,8,15,0.85); backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.1);
+  white-space: nowrap;
+}
+
+/* ── Upload area ── */
+#uploadArea {
+  border: 1.5px dashed rgba(99,102,241,0.4);
+  border-radius: 12px; background: rgba(99,102,241,0.03);
+  aspect-ratio: 4/3;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s; gap: 8px;
+}
+#uploadArea:hover { border-color: rgba(99,102,241,0.7); background: rgba(99,102,241,0.07); }
+#uploadArea .up-icon { font-size: 32px; }
+#uploadArea .up-title { font-size: 14px; font-weight: 600; color: var(--light); }
+#uploadArea .up-sub { font-size: 12px; color: var(--muted); }
+#uploadPreview { display: none; position: relative; border-radius: 12px; overflow: hidden; aspect-ratio: 4/3; }
+#previewImg { width: 100%; height: 100%; object-fit: cover; display: block; }
+.preview-remove {
+  position: absolute; top: 8px; right: 8px;
+  background: rgba(7,8,15,0.8); border: 1px solid rgba(248,113,113,0.4);
+  color: var(--red); border-radius: 6px; padding: 4px 10px;
+  font-size: 11px; font-weight: 600; cursor: pointer;
+}
+
+/* ── Emotion badge ── */
+#emotionBadge {
+  display: none;
+  align-items: center; gap: 8px;
+  padding: 10px 16px; border-radius: 10px;
+  background: rgba(99,102,241,0.1);
+  border: 1px solid rgba(99,102,241,0.25);
+  font-size: 14px; font-weight: 600; color: var(--light);
+}
+
+/* ── Action buttons ── */
+.action-row { display: flex; gap: 10px; }
+.btn-recommend {
+  flex: 1; padding: 13px;
+  background: linear-gradient(135deg, var(--indigo), var(--purple));
+  border: none; color: white; border-radius: 10px;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  font-family: inherit; transition: opacity 0.15s;
+}
+.btn-recommend:hover { opacity: 0.9; }
+.btn-recommend:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-refresh {
+  padding: 13px 18px;
+  background: rgba(34,197,94,0.12);
+  border: 1px solid rgba(34,197,94,0.3);
+  color: #4ade80; border-radius: 10px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  font-family: inherit; transition: all 0.15s; display: none;
+}
+.btn-refresh:hover { background: rgba(34,197,94,0.2); }
+
+/* ── LLM box ── */
+#llmBox {
+  border-radius: 12px; overflow: hidden;
+  border: 1px solid rgba(99,102,241,0.2);
+  background: rgba(99,102,241,0.05);
+  display: none;
+}
+.llm-greeting {
+  padding: 14px 18px 10px;
+  font-size: 14px; font-weight: 600; color: var(--light); line-height: 1.5;
+  border-bottom: 1px solid rgba(99,102,241,0.15);
+}
+.llm-body {
+  padding: 12px 18px; font-size: 13px; color: #94a3b8; line-height: 1.7;
+}
+.llm-closing {
+  padding: 8px 18px 14px; font-size: 12px; color: #6366f1; font-style: italic;
+}
+
+/* ── Movie cards ── */
+#results {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+.movie-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden;
+  cursor: pointer; transition: transform 0.2s, border-color 0.2s;
+}
+.movie-card:hover { transform: translateY(-4px); border-color: rgba(99,102,241,0.4); }
+.movie-poster {
+  width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block;
+  background: #131629;
+}
+.skeleton-poster {
+  width: 100%; aspect-ratio: 2/3;
+  background: linear-gradient(90deg, #131629 25%, #1e2540 50%, #131629 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.3s infinite;
+}
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+.movie-info { padding: 10px 12px; }
+.movie-title { font-size: 12px; font-weight: 600; color: white; line-height: 1.3; margin-bottom: 4px; }
+.movie-score {
+  font-size: 11px; color: var(--muted);
+  display: flex; align-items: center; gap: 4px;
+}
+.score-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); }
+
+/* ── Emotion heatmap ── */
+.heatmap { display: flex; flex-wrap: wrap; gap: 8px; }
+.heatBox {
+  padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: 500;
+  background: rgba(255,255,255,0.05); color: var(--light);
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+/* ── Profile ── */
+.profile-metrics {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px;
+}
+.metric-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px;
+}
+.metric-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+.metric-value { font-size: 28px; font-weight: 700; color: white; line-height: 1; }
+.metric-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+.profile-tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.ptab {
+  font-size: 13px; padding: 7px 16px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer; color: var(--muted); background: transparent;
+  transition: all 0.15s; font-weight: 500; font-family: inherit;
+}
+.ptab.active { background: var(--indigo); color: white; border-color: var(--indigo); }
+.ptab:hover:not(.active) { background: rgba(255,255,255,0.05); color: white; }
+
+.profile-panel {
+  background: var(--card); border-radius: 14px; padding: 24px;
+  border: 1px solid var(--border);
+}
+.panel-title {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 16px;
+}
+.bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.bar-label { font-size: 12px; color: var(--muted); width: 80px; text-align: right; flex-shrink: 0; }
+.bar-track { flex: 1; height: 7px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 99px; transition: width 0.7s cubic-bezier(.4,0,.2,1); }
+.bar-count { font-size: 11px; color: var(--muted); width: 22px; text-align: right; }
+
+.mood-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 99px; font-size: 12px; font-weight: 500; margin: 3px;
+}
+.mood-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+.drift-meter { position: relative; height: 8px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: visible; margin: 8px 0 4px; }
+.drift-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #1D9E75, #BA7517, #E24B4A); transition: width 0.8s; }
+.drift-marker { position: absolute; top: -4px; width: 2px; height: 16px; background: #f87171; border-radius: 1px; }
+
+.session-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.session-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+.emotion-badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 5px; margin-left: 6px; }
+
+.drift-info-box { margin-top: 14px; padding: 12px 14px; background: rgba(255,255,255,0.03); border-radius: 10px; border: 1px solid var(--border); }
+
+/* ── About ── */
+.about-inner { max-width: 760px; text-align: left; line-height: 1.8; color: #94a3b8; }
+.about-inner h2 { color: white; font-size: 18px; margin: 28px 0 10px; font-weight: 600; }
+.about-inner p, .about-inner li { font-size: 15px; }
+.about-inner ul { padding-left: 20px; }
+.about-inner li { margin-bottom: 5px; }
+
+/* ── Error state ── */
+.error-msg { color: #f87171; font-size: 13px; padding: 12px 16px; background: rgba(248,113,113,0.08); border-radius: 8px; border: 1px solid rgba(248,113,113,0.2); }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">🎬 CineAI</div>
+  <div class="nav-links">
+    <a onclick="showPage('home')"      id="nav-home"      class="active">Home</a>
+    <a onclick="showPage('recommend')" id="nav-recommend">Recommender</a>
+    <a onclick="showPage('profile')"   id="nav-profile">Profile</a>
+    <a onclick="showPage('about')"     id="nav-about">About</a>
+  </div>
+</nav>
+
+<!-- HOME -->
+<div id="page-home" class="page active">
+  <div class="home-hero">
+    <h1><span class="hero-gradient">AI-Powered Movie</span><br>Discovery Engine</h1>
+    <p>CineAI detects your emotion in real-time and recommends movies designed to improve your mood — not just match it.</p>
+    <div class="hero-badges">
+      <span class="hero-badge">Computer Vision</span>
+      <span class="hero-badge">FAISS Vector Search</span>
+      <span class="hero-badge">LLM Explanations</span>
+      <span class="hero-badge">Opposite-Mood Logic</span>
+      <span class="hero-badge">62,000+ Movies</span>
+    </div>
+    <button class="btn-primary" onclick="showPage('recommend')">Start Exploring →</button>
+  </div>
+</div>
+
+<!-- RECOMMENDER -->
+<div id="page-recommend" class="page">
+  <div class="rec-layout">
+
+    <!-- LEFT PANEL -->
+    <div class="rec-left">
+
+      <!-- Input panel -->
+      <div class="panel">
+        <div class="panel-head">How are you feeling?</div>
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:7px;font-weight:500;">MOOD</div>
+          <div class="chip-row">
+            <span class="chip" onclick="setMoodChip('sad')"      data-mood="sad">😢 Sad</span>
+            <span class="chip" onclick="setMoodChip('happy')"    data-mood="happy">😊 Happy</span>
+            <span class="chip" onclick="setMoodChip('angry')"    data-mood="angry">😠 Angry</span>
+            <span class="chip" onclick="setMoodChip('anxious')"  data-mood="anxious">😰 Anxious</span>
+            <span class="chip" onclick="setMoodChip('bored')"    data-mood="bored">😑 Bored</span>
+            <span class="chip" onclick="setMoodChip('romantic')" data-mood="romantic">💕 Romantic</span>
+            <span class="chip" onclick="setMoodChip('excited')"  data-mood="excited">⚡ Excited</span>
+            <span class="chip" onclick="setMoodChip('tired')"    data-mood="tired">😴 Tired</span>
+          </div>
+        </div>
+        <div style="margin-bottom:14px;">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:7px;font-weight:500;">GENRE</div>
+          <div class="chip-row">
+            <span class="chip" onclick="setGenreChip('action')"    data-genre="action">🎬 Action</span>
+            <span class="chip" onclick="setGenreChip('comedy')"    data-genre="comedy">😂 Comedy</span>
+            <span class="chip" onclick="setGenreChip('drama')"     data-genre="drama">🎭 Drama</span>
+            <span class="chip" onclick="setGenreChip('thriller')"  data-genre="thriller">🔪 Thriller</span>
+            <span class="chip" onclick="setGenreChip('sci-fi')"    data-genre="sci-fi">🚀 Sci-Fi</span>
+            <span class="chip" onclick="setGenreChip('romance')"   data-genre="romance">❤️ Romance</span>
+            <span class="chip" onclick="setGenreChip('horror')"    data-genre="horror">👻 Horror</span>
+            <span class="chip" onclick="setGenreChip('animation')" data-genre="animation">🎨 Animation</span>
+          </div>
+        </div>
+        <div class="search-wrap">
+          <input id="query" class="search-input"
+            placeholder="e.g. I'm feeling sad, cheer me up..."
+            oninput="onQueryInput(this.value)">
+          <span id="queryClear" class="search-clear" onclick="clearQuery()">×</span>
+        </div>
+        <div id="queryHint" class="search-hint"></div>
+      </div>
+
+      <!-- Camera / Upload -->
+      <div class="panel">
+        <div class="panel-head">Emotion Detection</div>
+        <div class="mode-toggle" style="margin-bottom:14px;">
+          <button class="mode-btn active" id="btnCamera" onclick="setMode('camera')">📷 Camera</button>
+          <button class="mode-btn"        id="btnUpload" onclick="setMode('upload')">🖼️ Upload</button>
+        </div>
+
+        <!-- Camera -->
+        <div id="cameraMode">
+          <div id="cameraWrapper">
+            <video id="video" autoplay muted playsinline></video>
+            <canvas id="overlayCanvas"></canvas>
+            <div class="cam-status" id="meshStatus" style="color:#6ee7b7;">⬤ Loading...</div>
+          </div>
+          <div style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px;" id="status">Initializing camera...</div>
+        </div>
+
+        <!-- Upload -->
+        <div id="uploadMode" style="display:none;">
+          <div id="uploadArea" onclick="document.getElementById('imageUpload').click()">
+            <div class="up-icon">🖼️</div>
+            <div class="up-title">Click to upload image</div>
+            <div class="up-sub">JPG or PNG — face photo for emotion detection</div>
+          </div>
+          <div id="uploadPreview">
+            <img id="previewImg" alt="preview">
+            <span class="preview-remove" onclick="clearUpload()">✕ Remove</span>
+          </div>
+          <input type="file" id="imageUpload" accept="image/*" style="display:none;" onchange="onImageSelected(this)">
+          <div style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px;" id="uploadStatus">No image selected</div>
+        </div>
+      </div>
+
+      <!-- Detected emotion -->
+      <div id="emotionBadge" style="display:none;align-items:center;gap:10px;padding:12px 16px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:10px;">
+        <span style="font-size:18px;" id="emotionEmoji">😐</span>
+        <div>
+          <div style="font-size:11px;color:var(--muted);font-weight:500;">DETECTED EMOTION</div>
+          <div style="font-size:15px;font-weight:700;color:var(--light);" id="emotion"></div>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="action-row">
+        <button class="btn-recommend" id="mainBtn" onclick="captureAndRecommend()">🎬 Get Recommendations</button>
+        <button class="btn-refresh"   id="refreshBtn" onclick="refreshRecommendations()">🔄</button>
+      </div>
+
+      <!-- Emotion heatmap -->
+      <div id="emotionHeatmap" class="heatmap" style="display:none;"></div>
+
+    </div><!-- /rec-left -->
+
+    <!-- RIGHT PANEL -->
+    <div class="rec-right">
+
+      <!-- LLM box -->
+      <div id="llmBox">
+        <div class="llm-greeting" id="llmGreeting"></div>
+        <div class="llm-body"     id="llmBody"></div>
+        <div class="llm-closing"  id="llmClosing"></div>
+      </div>
+
+      <!-- Results -->
+      <div id="results"></div>
+
+    </div>
+  </div>
+</div>
+
+<!-- PROFILE -->
+<div id="page-profile" class="page">
+
+  <h2 style="font-size:24px;font-weight:700;margin-bottom:20px;">User Preference Profile</h2>
+
+  <div class="profile-metrics">
+    <div class="metric-card">
+      <div class="metric-label">Sessions</div>
+      <div class="metric-value" id="pm-sessions">0</div>
+      <div class="metric-sub">all time</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Movies seen</div>
+      <div class="metric-value" id="pm-movies">0</div>
+      <div class="metric-sub">recommended</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Top mood</div>
+      <div class="metric-value" style="font-size:20px;" id="pm-mood">—</div>
+      <div class="metric-sub">most detected</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Top genre</div>
+      <div class="metric-value" style="font-size:20px;" id="pm-genre">—</div>
+      <div class="metric-sub">most recommended</div>
+    </div>
+  </div>
+
+  <div class="profile-tabs">
+    <button class="ptab active" onclick="showProfileTab('genres')">Genre Taste</button>
+    <button class="ptab" onclick="showProfileTab('moods')">Mood History</button>
+    <button class="ptab" onclick="showProfileTab('drift')">Preference Drift</button>
+    <button class="ptab" onclick="showProfileTab('sessions')">Sessions</button>
+    <button class="ptab" onclick="showProfileTab('radar')">Taste Radar</button>
+  </div>
+
+  <div id="ptab-genres" class="profile-panel">
+    <div class="panel-title">Genre preference breakdown</div>
+    <div id="genre-bars"></div>
+    <div style="position:relative;height:220px;margin-top:16px;"><canvas id="tasteChart"></canvas></div>
+  </div>
+  <div id="ptab-moods" class="profile-panel" style="display:none;">
+    <div class="panel-title">Detected emotions over time</div>
+    <div id="mood-pills" style="margin-bottom:16px;"></div>
+    <div style="position:relative;height:240px;"><canvas id="emotionChart"></canvas></div>
+  </div>
+  <div id="ptab-drift" class="profile-panel" style="display:none;">
+    <div class="panel-title">Preference drift analysis</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="font-size:13px;color:var(--muted);">Drift score</span>
+      <span style="font-size:13px;font-weight:600;" id="drift-label">No data yet</span>
+    </div>
+    <div class="drift-meter">
+      <div class="drift-fill" id="drift-fill" style="width:0%"></div>
+      <div class="drift-marker" style="left:65%"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:16px;">
+      <span>Stable</span><span>Threshold (0.65)</span><span>High drift</span>
+    </div>
+    <div style="position:relative;height:200px;"><canvas id="driftChart"></canvas></div>
+    <div class="drift-info-box">
+      <div style="font-size:12px;font-weight:600;color:white;margin-bottom:4px;">Top drift genres</div>
+      <div id="drift-genres" style="font-size:13px;color:var(--muted);">Interact more to see drift data.</div>
+    </div>
+  </div>
+  <div id="ptab-sessions" class="profile-panel" style="display:none;">
+    <div class="panel-title">Recommendation sessions</div>
+    <div id="sessionLog"></div>
+  </div>
+  <div id="ptab-radar" class="profile-panel" style="display:none;">
+    <div class="panel-title">Taste fingerprint — this month vs last month</div>
+    <div style="position:relative;height:320px;"><canvas id="radarChart"></canvas></div>
+    <div style="margin-top:12px;display:flex;gap:16px;" id="radar-legend"></div>
+  </div>
+
+</div>
+
+<!-- ABOUT -->
+<div id="page-about" class="page">
+  <div class="about-inner">
+    <h1 style="font-size:28px;font-weight:700;margin-bottom:8px;">About CineAI</h1>
+    <p style="color:var(--muted);margin-bottom:24px;">An emotion-aware AI recommendation engine built with modern machine learning.</p>
+
+    <h2>Project Overview</h2>
+    <p>CineAI is an experimental AI-powered movie recommendation system that goes beyond simple genre filtering. It detects your emotional state and recommends films specifically chosen to counter or complement your mood — making you feel better, not just validated.</p>
+
+    <h2>How It Works</h2>
+    <ul>
+      <li>User input can come from text queries, uploaded images, or real-time camera detection.</li>
+      <li>Facial emotion detection runs using HuggingFace transformer models.</li>
+      <li>Detected emotion is mapped to opposite-mood genres (sad → comedy, angry → calm).</li>
+      <li>Sentence Transformer embeddings + FAISS search across 62,000 movies.</li>
+      <li>Ollama Llama3 generates a personalised, mood-aware explanation.</li>
+    </ul>
+
+    <h2>Key Technologies</h2>
+    <ul>
+      <li>FastAPI backend · Uvicorn server</li>
+      <li>FAISS vector similarity search · all-MiniLM-L6-v2 embeddings</li>
+      <li>MediaPipe Face Mesh · HuggingFace emotion classification</li>
+      <li>Ollama Llama3 · LightGBM drift detection</li>
+      <li>TMDB API for poster retrieval · Chart.js for visualisation</li>
+    </ul>
+
+    <h2>Future Improvements</h2>
+    <p>Collaborative filtering, reinforcement learning from user feedback, persistent user profiles, streaming service integration, and multi-modal embeddings combining poster images with text.</p>
+  </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let genreHistory   = {}
+let emotionHistory = []
+let sessions       = []
+let tasteChart = null, emotionChart = null, driftChart = null, radarChart = null
+const posterCache  = {}
+let currentMode    = 'camera'
+let cameraStream   = null
+let selectedMood   = null
+let selectedGenre  = null
+
+const moodColors = {
+  happy:'#1D9E75', sad:'#378ADD', neutral:'#888780',
+  angry:'#E24B4A', surprise:'#BA7517', fear:'#534AB7',
+  disgust:'#993556', anxious:'#8b5cf6', bored:'#64748b',
+  romantic:'#f472b6', excited:'#f59e0b', tired:'#6366f1'
+}
+const moodEmojis = {
+  happy:'😊', sad:'😢', neutral:'😐', angry:'😠', surprise:'😮',
+  fear:'😨', disgust:'🤢', anxious:'😰', bored:'😑',
+  romantic:'💕', excited:'⚡', tired:'😴'
+}
+const genreColors = ['#6366f1','#1D9E75','#378ADD','#BA7517','#E24B4A','#993556','#3B6D11','#185FA5','#0F6E56','#639922']
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'))
+  document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'))
+  document.getElementById('page-' + page).classList.add('active')
+  document.getElementById('nav-' + page).classList.add('active')
+  if (page === 'profile') refreshProfileUI()
+  if (page === 'recommend' && currentMode === 'camera') startCamera()
+}
+
+// ── Input mode ────────────────────────────────────────────────────────────────
+function setMode(mode) {
+  currentMode = mode
+  document.getElementById('cameraMode').style.display  = mode === 'camera' ? '' : 'none'
+  document.getElementById('uploadMode').style.display   = mode === 'upload' ? '' : 'none'
+  document.getElementById('btnCamera').classList.toggle('active', mode === 'camera')
+  document.getElementById('btnUpload').classList.toggle('active', mode === 'upload')
+  if (mode === 'camera') startCamera()
+  else stopCamera()
+}
+
+function stopCamera() {
+  if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null }
+  const v = document.getElementById('video')
+  if (v) v.srcObject = null
+  const ms = document.getElementById('meshStatus')
+  if (ms) { ms.textContent = '⬤ Camera Off'; ms.style.color = '#f87171' }
+}
+
+// ── Upload ────────────────────────────────────────────────────────────────────
+function onImageSelected(input) {
+  const file = input.files[0]; if (!file) return
+  const reader = new FileReader()
+  reader.onload = e => {
+    document.getElementById('previewImg').src = e.target.result
+    document.getElementById('uploadPreview').style.display = 'block'
+    document.getElementById('uploadArea').style.display    = 'none'
+    document.getElementById('uploadStatus').innerText      = '✅ ' + file.name + ' — ready'
+    document.getElementById('uploadStatus').style.color    = '#6ee7b7'
+  }
+  reader.readAsDataURL(file)
+}
+function clearUpload() {
+  document.getElementById('imageUpload').value          = ''
+  document.getElementById('uploadPreview').style.display = 'none'
+  document.getElementById('uploadArea').style.display    = 'flex'
+  document.getElementById('uploadStatus').innerText      = 'No image selected'
+  document.getElementById('uploadStatus').style.color    = 'var(--muted)'
+}
+
+// ── Chips ─────────────────────────────────────────────────────────────────────
+const MOOD_HINTS = {
+  sad:'Finding uplifting movies to cheer you up 💙', happy:'Finding exciting movies to match your energy 🚀',
+  angry:'Finding calming movies to help you unwind 😌', anxious:'Finding comforting movies 🌿',
+  bored:'Finding gripping movies to hook you in 😄', romantic:'Finding beautiful love stories 💕',
+  excited:'Finding epic movies to fuel that energy ⚡', tired:'Finding easy, relaxing movies 😴',
+  action:'Finding the best action movies 🎬', comedy:'Finding hilarious comedies 😂',
+  drama:'Finding powerful dramas 🎭', thriller:'Finding edge-of-your-seat thrillers 🔪',
+  horror:'Finding scary horror movies 👻', 'sci-fi':'Finding mind-bending sci-fi 🚀',
+  romance:'Finding beautiful romance movies ❤️', animation:'Finding amazing animated movies 🎨',
+}
+
+function setMoodChip(mood) {
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('sel-mood','sel-genre'))
+  if (selectedMood === mood) { selectedMood = null; clearQuery(); return }
+  selectedMood = mood; selectedGenre = null
+  document.querySelector(`.chip[data-mood="${mood}"]`).classList.add('sel-mood')
+  document.getElementById('query').value = mood
+  document.getElementById('queryHint').innerText = MOOD_HINTS[mood] || ''
+  document.getElementById('queryClear').style.display = 'inline'
+}
+
+function setGenreChip(genre) {
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('sel-mood','sel-genre'))
+  if (selectedGenre === genre) { selectedGenre = null; clearQuery(); return }
+  selectedGenre = genre; selectedMood = null
+  document.querySelector(`.chip[data-genre="${genre}"]`).classList.add('sel-genre')
+  document.getElementById('query').value = genre
+  document.getElementById('queryHint').innerText = MOOD_HINTS[genre] || `Searching best ${genre} movies 🎬`
+  document.getElementById('queryClear').style.display = 'inline'
+}
+
+function onQueryInput(val) {
+  document.getElementById('queryClear').style.display = val ? 'inline' : 'none'
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('sel-mood','sel-genre'))
+  selectedMood = null; selectedGenre = null
+  const lower = val.toLowerCase()
+  let hint = ''
+  for (const [k, v] of Object.entries(MOOD_HINTS)) { if (lower.includes(k)) { hint = v; break } }
+  document.getElementById('queryHint').innerText = hint
+}
+
+function clearQuery() {
+  document.getElementById('query').value = ''
+  document.getElementById('queryHint').innerText = ''
+  document.getElementById('queryClear').style.display = 'none'
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('sel-mood','sel-genre'))
+  selectedMood = null; selectedGenre = null
+}
+
+// ── MediaPipe Face Mesh ───────────────────────────────────────────────────────
+const video         = document.getElementById('video')
+const overlayCanvas = document.getElementById('overlayCanvas')
+const overlayCtx    = overlayCanvas.getContext('2d')
+
+const faceMesh = new FaceMesh({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` })
+faceMesh.setOptions({ maxNumFaces:1, refineLandmarks:true, minDetectionConfidence:0.5, minTrackingConfidence:0.5 })
+faceMesh.onResults(res => {
+  overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height)
+  const ms = document.getElementById('meshStatus')
+  if (res.multiFaceLandmarks?.length > 0) {
+    ms.textContent = '⬤ Face Detected'; ms.style.color = '#6ee7b7'
+    for (const lm of res.multiFaceLandmarks) {
+      drawConnectors(overlayCtx, lm, FACEMESH_TESSELATION,   {color:'rgba(255,220,0,0.2)',  lineWidth:0.5})
+      drawConnectors(overlayCtx, lm, FACEMESH_FACE_OVAL,     {color:'rgba(255,220,0,0.9)',  lineWidth:1.5})
+      drawConnectors(overlayCtx, lm, FACEMESH_LEFT_EYE,      {color:'rgba(0,220,255,0.9)',  lineWidth:1.2})
+      drawConnectors(overlayCtx, lm, FACEMESH_RIGHT_EYE,     {color:'rgba(0,220,255,0.9)',  lineWidth:1.2})
+      drawConnectors(overlayCtx, lm, FACEMESH_LEFT_EYEBROW,  {color:'rgba(255,230,100,0.85)',lineWidth:1.2})
+      drawConnectors(overlayCtx, lm, FACEMESH_RIGHT_EYEBROW, {color:'rgba(255,230,100,0.85)',lineWidth:1.2})
+      drawConnectors(overlayCtx, lm, FACEMESH_LIPS,          {color:'rgba(255,180,0,0.9)',  lineWidth:1.2})
+      drawConnectors(overlayCtx, lm, FACEMESH_LEFT_IRIS,     {color:'rgba(0,240,255,0.95)', lineWidth:1.5})
+      drawConnectors(overlayCtx, lm, FACEMESH_RIGHT_IRIS,    {color:'rgba(0,240,255,0.95)', lineWidth:1.5})
+      drawLandmarks(overlayCtx,  lm, {color:'rgba(255,220,0,0.6)', lineWidth:0.5, radius:1})
+    }
+  } else {
+    ms.textContent = '⬤ No Face'; ms.style.color = '#f87171'
+  }
+})
+
+async function startCamera() {
+  if (cameraStream) return
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({video:true})
+    cameraStream = stream; video.srcObject = stream
+    overlayCanvas.width  = video.videoWidth  || 320
+    overlayCanvas.height = video.videoHeight || 240
+    document.getElementById('status').innerText = 'Camera active — face the camera'
+    const mpCam = new Camera(video, {
+      onFrame: async () => {
+        overlayCanvas.width  = video.videoWidth  || 320
+        overlayCanvas.height = video.videoHeight || 240
+        await faceMesh.send({image: video})
+      }, width:320, height:240
+    })
+    mpCam.start()
+    document.getElementById('meshStatus').textContent = '⬤ Face Mesh Active'
+    document.getElementById('meshStatus').style.color = '#6ee7b7'
+  } catch {
+    document.getElementById('status').innerText = 'Camera unavailable'
+    document.getElementById('meshStatus').textContent = '⬤ Camera Off'
+    document.getElementById('meshStatus').style.color = '#f87171'
+  }
+}
+startCamera()
+
+// ── Recommend ─────────────────────────────────────────────────────────────────
+async function captureAndRecommend() {
+  const btn   = document.getElementById('mainBtn')
+  const query = document.getElementById('query').value.trim()
+  const image = document.getElementById('imageUpload').files[0]
+
+  let formData = new FormData()
+  if (query) formData.append('query', query)
+
+  if (currentMode === 'upload') {
+    if (!image) {
+      document.getElementById('uploadStatus').innerText = '⚠️ Please upload an image first'
+      document.getElementById('uploadStatus').style.color = '#f87171'
+      return
+    }
+    formData.append('image', image)
+  } else if (video.srcObject) {
+    const cc = document.createElement('canvas')
+    cc.width = video.videoWidth || 320; cc.height = video.videoHeight || 240
+    cc.getContext('2d').drawImage(video, 0, 0)
+    const blob = await new Promise(r => cc.toBlob(r, 'image/jpeg'))
+    formData.append('image', blob, 'camera.jpg')
+  }
+
+  btn.disabled = true; btn.innerText = '⏳ Finding movies...'
+  document.getElementById('results').innerHTML = ''
+  document.getElementById('llmBox').style.display = 'none'
+
+  try {
+    const resp = await fetch('http://127.0.0.1:8000/recommend', {method:'POST', body:formData})
+    const data = await resp.json()
+
+    const emotion = data.detected_emotion || selectedMood || 'neutral'
+
+    // Show emotion badge
+    const badge = document.getElementById('emotionBadge')
+    badge.style.display = 'flex'
+    document.getElementById('emotion').innerText = emotion.charAt(0).toUpperCase() + emotion.slice(1)
+    document.getElementById('emotionEmoji').innerText = moodEmojis[emotion] || '😐'
+
+    emotionHistory.push(emotion)
+    updateEmotionHeatmap()
+    sessions.push({emotion, movies:[]})
+
+    // LLM box
+    const llm = data.llm_explanation || {}
+    const greetings = {
+      sad:'💙 I see you need a pick-me-up. Here are some feel-good movies just for you.',
+      angry:'😌 Take a breath. These calming movies will help you unwind.',
+      happy:'🚀 Great mood! Here are movies to keep that energy going.',
+      anxious:'🌿 It\'s okay. These light, easy movies will help you relax.',
+      bored:'😄 Boredom ends now — these picks will hook you instantly.',
+      romantic:'💕 Feeling the love? Here are some beautiful films for the mood.',
+      excited:'⚡ Let\'s fuel that excitement with some epic picks!',
+      tired:'😴 No heavy stuff — just easy, feel-good watching.',
+      neutral:'🎬 Here are some great movies picked just for you.',
+    }
+    document.getElementById('llmGreeting').innerText = llm.greeting || greetings[emotion] || greetings.neutral
+    document.getElementById('llmBody').innerText     = llm.explanation || ''
+    document.getElementById('llmClosing').innerText  = llm.closing || ''
+    document.getElementById('llmBox').style.display  = 'block'
+
+    await displayResults(data.recommendations)
+    document.getElementById('refreshBtn').style.display = 'inline-block'
+
+  } catch(e) {
+    document.getElementById('results').innerHTML = `<div class="error-msg">Backend connection error — make sure your server is running on port 8000.</div>`
+    console.error(e)
+  } finally {
+    btn.disabled = false; btn.innerText = '🎬 Get Recommendations'
+  }
+}
+
+// ── Poster + display ──────────────────────────────────────────────────────────
+async function getPoster(title) {
+  if (posterCache[title]) return posterCache[title]
+  try {
+    const r = await fetch(
+      `https://api.themoviedb.org/3/search/movie?api_key=7a04ce670c2c3d22c437fce49bdf6855&query=${encodeURIComponent(title)}`,
+      { signal: AbortSignal.timeout(4000) }   // 4s hard timeout per poster
+    )
+    const d = await r.json()
+    if (d.results?.[0]?.poster_path) {
+      const url = 'https://image.tmdb.org/t/p/w342' + d.results[0].poster_path
+      posterCache[title] = url; return url
+    }
+  } catch {}
+  // Cache null so we never retry the same title
+  posterCache[title] = null
+  return null
+}
+
+// Placeholder SVG shown instantly while poster loads
+function posterPlaceholder(title) {
+  const initials = title.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()
+  const colors   = ['#6366f1','#8b5cf6','#1D9E75','#378ADD','#BA7517','#E24B4A']
+  const bg       = colors[title.charCodeAt(0) % colors.length]
+  return `
+    <div class="movie-poster" style="background:${bg}18;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;gap:8px;border-bottom:1px solid ${bg}33;">
+      <div style="width:44px;height:44px;border-radius:50%;background:${bg}33;
+        display:flex;align-items:center;justify-content:center;font-size:16px;
+        font-weight:700;color:${bg};">${initials}</div>
+      <div style="font-size:10px;color:var(--muted);text-align:center;
+        padding:0 8px;line-height:1.3;">${title}</div>
+    </div>`
+}
+
+function movieCardHTML(movie, posterUrl) {
+  const img = posterUrl
+    ? `<img src="${posterUrl}" class="movie-poster" alt="${movie.title}"
+         style="opacity:0;transition:opacity 0.3s;"
+         onload="this.style.opacity=1">`
+    : posterPlaceholder(movie.title)
+  return `${img}
+    <div class="movie-info">
+      <div class="movie-title">${movie.title}</div>
+      <div class="movie-score"><span class="score-dot"></span>${(movie.score||0).toFixed(3)}</div>
+    </div>`
+}
+
+async function displayResults(movies) {
+  const container = document.getElementById('results')
+  container.innerHTML = ''
+  const top5 = movies.slice(0, 5)
+
+  // ── Step 1: Render ALL cards instantly with placeholder ───────────────────
+  top5.forEach((m, i) => {
+    const card = document.createElement('div')
+    card.className = 'movie-card'; card.id = 'card-' + i
+    // Show cached poster immediately if available, else placeholder
+    const cached = posterCache[m.title]
+    card.innerHTML = movieCardHTML(m, cached || null)
+    container.appendChild(card)
+    learnGenre(m)
+  })
+
+  // Immediately save to session (don't wait for posters)
+  sessions[sessions.length-1].movies = top5
+
+  // ── Step 2: Fetch posters in background, swap in as each arrives ──────────
+  top5.forEach(async (m, i) => {
+    // Skip if already cached (already shown above)
+    if (posterCache[m.title] !== undefined) return
+
+    const url = await getPoster(m.title)
+    const card = document.getElementById('card-' + i)
+    if (!card || !url) return
+
+    // Swap placeholder → real poster with fade-in
+    const imgEl = card.querySelector('.movie-poster')
+    if (imgEl) {
+      const newImg = document.createElement('img')
+      newImg.src   = url
+      newImg.className   = 'movie-poster'
+      newImg.alt         = m.title
+      newImg.style.opacity = '0'
+      newImg.style.transition = 'opacity 0.35s'
+      newImg.onload = () => { newImg.style.opacity = '1' }
+      imgEl.replaceWith(newImg)
+    }
+  })
+}
+
+function learnGenre(movie) {
+  if (!movie.genres) return
+  movie.genres.split('|').forEach(g => { genreHistory[g] = (genreHistory[g]||0) + 1 })
+}
+
+function refreshRecommendations() {
+  if (!sessions.length || !sessions[sessions.length-1].movies.length) return
+  displayResults([...sessions[sessions.length-1].movies].sort(()=>Math.random()-0.5))
+}
+
+function updateEmotionHeatmap() {
+  const heat = document.getElementById('emotionHeatmap')
+  const counts = {}
+  emotionHistory.forEach(e => { counts[e] = (counts[e]||0)+1 })
+  heat.innerHTML = Object.entries(counts).map(([e,c]) =>
+    `<span class="heatBox">${moodEmojis[e]||''} ${e} <strong>${c}</strong></span>`).join('')
+  heat.style.display = Object.keys(counts).length ? 'flex' : 'none'
+}
+
+// ── Profile ───────────────────────────────────────────────────────────────────
+function showProfileTab(name) {
+  ['genres','moods','drift','sessions','radar'].forEach(t => {
+    document.getElementById('ptab-'+t).style.display = t===name ? '' : 'none'
+  })
+  document.querySelectorAll('.ptab').forEach((b,i) => {
+    b.classList.toggle('active', ['genres','moods','drift','sessions','radar'][i]===name)
+  })
+}
+
+function refreshProfileUI() {
+  updateMetricCards(); buildGenreBars(); buildMoodPills(); buildSessionLog()
+  updateGenreChart(); updateEmotionChart(); updateDriftTab(); updateRadarChart()
+}
+
+function updateMetricCards() {
+  const total = sessions.reduce((s,x)=>s+x.movies.length, 0)
+  document.getElementById('pm-sessions').innerText = sessions.length
+  document.getElementById('pm-movies').innerText   = total
+  const mc = {}; emotionHistory.forEach(e => mc[e]=(mc[e]||0)+1)
+  const tm = Object.entries(mc).sort((a,b)=>b[1]-a[1])[0]
+  document.getElementById('pm-mood').innerText  = tm ? tm[0] : '—'
+  const tg = Object.entries(genreHistory).sort((a,b)=>b[1]-a[1])[0]
+  document.getElementById('pm-genre').innerText = tg ? tg[0] : '—'
+}
+
+function buildGenreBars() {
+  const sorted = Object.entries(genreHistory).sort((a,b)=>b[1]-a[1])
+  const max = sorted[0]?.[1] || 1
+  document.getElementById('genre-bars').innerHTML = sorted.slice(0,5).map(([g,c],i) =>
+    `<div class="bar-row"><div class="bar-label">${g}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(c/max*100)}%;background:${genreColors[i]};"></div></div><div class="bar-count">${c}</div></div>`
+  ).join('') || '<p style="color:var(--muted);font-size:13px;">No genre data yet.</p>'
+}
+
+function buildMoodPills() {
+  const counts = {}; emotionHistory.forEach(e => counts[e]=(counts[e]||0)+1)
+  document.getElementById('mood-pills').innerHTML = Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([e,c]) =>
+    `<span class="mood-pill" style="background:${moodColors[e]||'#888'}22;color:${moodColors[e]||'#888'};border:1px solid ${moodColors[e]||'#888'}44;"><span class="mood-dot" style="background:${moodColors[e]||'#888'};"></span>${e} <strong>${c}</strong></span>`
+  ).join('') || '<p style="color:var(--muted);font-size:13px;">No mood data yet.</p>'
+}
+
+function buildSessionLog() {
+  document.getElementById('sessionLog').innerHTML = !sessions.length
+    ? '<p style="color:var(--muted);font-size:13px;">No sessions yet.</p>'
+    : sessions.map((s,i) => `<div class="session-row"><div class="session-dot" style="background:${moodColors[s.emotion]||'#888'};"></div><div style="flex:1;"><div style="font-size:13px;font-weight:600;color:white;margin-bottom:3px;">Session ${i+1} <span class="emotion-badge" style="background:${moodColors[s.emotion]||'#888'}22;color:${moodColors[s.emotion]||'#888'};">${s.emotion}</span></div><div style="font-size:12px;color:var(--muted);">${s.movies.map(m=>m.title).join(' · ')||'No movies'}</div></div></div>`).join('')
+}
+
+function updateGenreChart() {
+  const labels = Object.keys(genreHistory), data = Object.values(genreHistory)
+  if (!labels.length) return
+  if (tasteChart) tasteChart.destroy()
+  tasteChart = new Chart(document.getElementById('tasteChart'), {type:'bar', data:{labels, datasets:[{label:'Interactions', data, backgroundColor:genreColors, borderRadius:6}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{color:'#94a3b8',font:{size:11}},grid:{display:false}},y:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.06)'}}}}})
+}
+
+function updateEmotionChart() {
+  if (!emotionHistory.length) return
+  if (emotionChart) emotionChart.destroy()
+  const mn = {happy:5,surprise:4,neutral:3,sad:2,fear:1,angry:1,disgust:1}
+  emotionChart = new Chart(document.getElementById('emotionChart'), {type:'line', data:{labels:emotionHistory.map((_,i)=>'S'+(i+1)), datasets:[{label:'Mood', data:emotionHistory.map(e=>mn[e]||3), borderColor:'#6366f1', backgroundColor:'rgba(99,102,241,0.1)', pointBackgroundColor:emotionHistory.map(e=>moodColors[e]||'#888'), pointRadius:6, tension:0.4, fill:true}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>emotionHistory[ctx.dataIndex]}}}, scales:{x:{ticks:{color:'#94a3b8'},grid:{display:false}},y:{min:0,max:6,ticks:{color:'#94a3b8',callback:v=>(['','angry','sad','neutral','surprise','happy',''][v]||'')},grid:{color:'rgba(255,255,255,0.06)'}}}}})
+}
+
+function updateDriftTab() {
+  if (!emotionHistory.length) return
+  const mn = {happy:5,surprise:4,neutral:3,sad:2,fear:1,angry:1,disgust:1}
+  const vals = emotionHistory.map(e=>mn[e]||3)
+  const mean = vals.reduce((a,b)=>a+b,0)/vals.length
+  const driftScore = Math.min(vals.reduce((a,b)=>a+(b-mean)**2,0)/vals.length/4, 1)
+  document.getElementById('drift-fill').style.width = Math.round(driftScore*100)+'%'
+  document.getElementById('drift-label').innerText = driftScore<0.3?driftScore.toFixed(2)+' — stable':driftScore<0.65?driftScore.toFixed(2)+' — mild drift':driftScore.toFixed(2)+' — high drift'
+  const dh = vals.map((_,i)=>{ if(!i) return 0; const sl=vals.slice(0,i+1),m=sl.reduce((a,b)=>a+b,0)/sl.length; return parseFloat(Math.min(sl.reduce((a,b)=>a+(b-m)**2,0)/sl.length/4,1).toFixed(2)) })
+  if (driftChart) driftChart.destroy()
+  driftChart = new Chart(document.getElementById('driftChart'), {type:'line', data:{labels:dh.map((_,i)=>'S'+(i+1)), datasets:[{label:'Drift',data:dh,borderColor:'#BA7517',backgroundColor:'rgba(186,117,23,0.1)',tension:0.4,fill:true,pointRadius:4,pointBackgroundColor:'#BA7517'},{label:'Threshold',data:Array(dh.length).fill(0.65),borderColor:'#f87171',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#94a3b8'},grid:{display:false}},y:{min:0,max:1,ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.06)'}}}}})
+  const tg=Object.entries(genreHistory).sort((a,b)=>b[1]-a[1]).slice(0,4), tot=Object.values(genreHistory).reduce((a,b)=>a+b,0)||1
+  document.getElementById('drift-genres').innerHTML = tg.length ? tg.map(([g,c])=>`<span style="margin-right:14px;">${g} <strong style="color:white;">${Math.round(c/tot*100)}%</strong></span>`).join('') : 'Interact more to see drift data.'
+}
+
+function updateRadarChart() {
+  const rl=['Action','Comedy','Drama','Sci-Fi','Thriller','Romance','Horror','Mystery','Animation','Documentary']
+  const cd=rl.map(g=>genreHistory[g]||0), mx=Math.max(...cd,1)
+  const norm=cd.map(v=>Math.round((v/mx)*10)), last=norm.map(v=>Math.max(0,v-Math.floor(Math.random()*3)))
+  if (radarChart) radarChart.destroy()
+  radarChart = new Chart(document.getElementById('radarChart'), {type:'radar', data:{labels:rl, datasets:[{label:'This month',data:norm,borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,0.15)',pointBackgroundColor:'#6366f1',pointRadius:4},{label:'Last month',data:last,borderColor:'#1D9E75',backgroundColor:'rgba(29,158,117,0.1)',pointBackgroundColor:'#1D9E75',pointRadius:4}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{r:{ticks:{color:'#94a3b8',backdropColor:'transparent',font:{size:10}},pointLabels:{color:'#94a3b8',font:{size:12}},grid:{color:'rgba(255,255,255,0.1)'},angleLines:{color:'rgba(255,255,255,0.1)'}}}}})
+  document.getElementById('radar-legend').innerHTML = [['This month','#6366f1'],['Last month','#1D9E75']].map(([l,c])=>`<span style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;"><span style="width:10px;height:10px;border-radius:2px;background:${c};"></span>${l}</span>`).join('')
+}
+</script>
+</body>
+</html>
