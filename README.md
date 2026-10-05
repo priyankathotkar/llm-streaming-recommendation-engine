@@ -457,10 +457,7 @@ Specifically, the following are original contributions:
 - LightGBM preference drift detection approach
 - 5-level fallback chain design
 
-**AI tools used:** Claude (Anthropic) was used during development for
-debugging assistance and code formatting — similar to how engineers use
-GitHub Copilot. All design decisions, architectural choices, and
-algorithmic approaches are my own.
+
 
 **Open-source libraries used** (all properly licensed):
 
